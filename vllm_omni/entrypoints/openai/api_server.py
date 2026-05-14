@@ -8,7 +8,8 @@ import json
 import multiprocessing
 import multiprocessing.forkserver as forkserver
 import os
-
+import torch
+from vllm_omni.diffusion.models.internvla_a1.config import OBS_TASK, OBS_STATE, OBS_IMAGES
 # Image generation API imports
 import random
 import time
@@ -105,6 +106,9 @@ from vllm_omni.entrypoints.openai.protocol.images import (
     ImageGenerationRequest,
     ImageGenerationResponse,
 )
+from vllm_omni.entrypoints.openai.protocol.actions import (
+    ActionGenerationRequest,
+)
 from vllm_omni.entrypoints.openai.protocol.videos import (
     SecondStr,
     SizeStr,
@@ -171,6 +175,42 @@ class ProfileRequest(BaseModel):
         description="List of stage IDs to profile. If None, profiles all stages.",
     )
 
+def collate_open_loop_samples(
+    samples,
+    *,
+    device: str,
+    dtype: torch.dtype,
+):
+    first = samples[0]
+    batch_inputs = {}
+
+    for key in first.inputs:
+        values = [sample.inputs[key] for sample in samples]
+
+        if isinstance(values[0], torch.Tensor):
+            tensor = torch.stack(values, dim=0)
+
+            if tensor.dtype in (torch.int64, torch.bool):
+                batch_inputs[key] = tensor.to(device=device)
+            else:
+                batch_inputs[key] = tensor.to(device=device, dtype=dtype)
+        else:
+            batch_inputs[key] = values
+
+    metadata = {
+        "indices": [sample.index for sample in samples],
+        "episode_indices": [sample.episode_index for sample in samples],
+        "tasks": [sample.task for sample in samples],
+    }
+
+    return batch_inputs, metadata
+
+class ActionSample:
+    def __init__(self, task, inputs):
+        self.task = task
+        self.inputs = inputs
+        self.index = 0
+        self.episode_index = 0
 
 def _remove_route_from_router(
     router: APIRouter,
@@ -1659,6 +1699,74 @@ async def generate_images(request: ImageGenerationRequest, raw_request: Request)
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail=f"Image generation failed: {str(e)}"
         )
 
+
+@router.post("/v1/actions/generations")
+async def generate_actions(request: ActionGenerationRequest, raw_request: Request):
+    import base64
+    import io
+    from PIL import Image
+    import torchvision.transforms as T
+
+    engine_client, model_name, stage_configs = _get_engine_and_model(raw_request)
+
+    request_id = f"act-{random_uuid()}"
+    raw_request.state.request_metadata = RequestResponseMetadata(request_id=request_id)
+
+    if request.images is None:
+        raise HTTPException(status_code=400, detail="Missing images")
+
+    transform = T.Compose([
+        T.Resize((224, 224)),
+        T.ToTensor(),
+    ])
+
+    imgs = {}
+    for name, b64 in request.images.items():
+        pil = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        img = transform(pil)                    # (3, 224, 224)
+        imgs[name] = torch.stack([img, img], 0) # (2, 3, 224, 224)
+
+    sample = ActionSample(
+        task=request.task,
+        inputs={
+            OBS_TASK: request.task,
+            OBS_STATE: torch.tensor(request.state),
+
+            f"{OBS_IMAGES}.image0": imgs["image0"],
+            f"{OBS_IMAGES}.image1": imgs["image1"],
+            f"{OBS_IMAGES}.image2": imgs["image2"],
+
+            f"{OBS_IMAGES}.image0_mask": torch.tensor(True),
+            f"{OBS_IMAGES}.image1_mask": torch.tensor(True),
+            f"{OBS_IMAGES}.image2_mask": torch.tensor(True),
+        },
+    )
+
+    batch_inputs, _ = collate_open_loop_samples(
+        [sample],
+        device="cuda",
+        dtype=torch.bfloat16,
+    )
+
+    gen_params = OmniDiffusionSamplingParams(
+        num_outputs_per_prompt=1,
+        extra_args={
+            "batch_inputs": batch_inputs,
+        },
+    )
+
+    result = await _generate_with_async_omni(
+        engine_client=engine_client,
+        gen_params=gen_params,
+        stage_configs=stage_configs,
+        request_id=request_id,
+    )
+
+    return {
+        "id": request_id,
+        "model": model_name,
+        "result": result.request_output,
+    }
 
 @router.post(
     "/v1/images/edits",

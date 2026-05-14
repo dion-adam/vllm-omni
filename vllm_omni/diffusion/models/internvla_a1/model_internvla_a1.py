@@ -949,6 +949,7 @@ class InternVLAA1Policy(nn.Module):
         )
         state = self.prepare_state(batch)
         images, img_masks = self._preprocess_images(batch, resized_histories=resized_histories)
+
         return self.model.sample_actions(
             images,
             img_masks,

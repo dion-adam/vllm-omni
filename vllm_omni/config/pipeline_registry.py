@@ -65,6 +65,10 @@ _OMNI_PIPELINES: dict[str, tuple[str, str]] = {
         "vllm_omni.model_executor.models.bagel.pipeline",
         "BAGEL_SINGLE_STAGE_PIPELINE",
     ),
+    "internvla_a1_single_stage": (
+        "vllm_omni.model_executor.models.internvla_a1.pipeline",
+        "INTERNVLA_A1_SINGLE_STAGE_PIPELINE",
+    ),
     "glm_image": (
         "vllm_omni.model_executor.models.glm_image.pipeline",
         "GLM_IMAGE_PIPELINE",

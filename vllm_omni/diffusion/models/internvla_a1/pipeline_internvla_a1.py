@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 from __future__ import annotations
-
+from collections.abc import Iterable
 import json
 import os
 from typing import Any
@@ -30,13 +30,13 @@ from .model_internvla_a1 import InternVLAA1Policy, resolve_cosmos_checkpoint_pat
 logger = init_logger(__name__)
 
 
+def internvla_a1_post_process_func(x):
+    return x
+
+
 def get_internvla_a1_post_process_func(od_config: OmniDiffusionConfig):
     del od_config
-
-    def post_process_func(x):
-        return x
-
-    return post_process_func
+    return internvla_a1_post_process_func
 
 
 class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
@@ -49,6 +49,10 @@ class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
         self.model_dir = od_config.model
         self.config = self._build_config(od_config)
         custom_args = od_config.custom_pipeline_args or {}
+        print("DEBUG_INTERNVLA_OD_CONFIG_MODEL:", od_config.model, flush=True)
+        print("DEBUG_INTERNVLA_MODEL_CLASS_NAME:", od_config.model_class_name, flush=True)
+        print("DEBUG_INTERNVLA_CUSTOM_ARGS:", custom_args, flush=True)
+        print("DEBUG_INTERNVLA_DTYPE:", getattr(od_config, "dtype", None), flush=True)  
         self.strict_load = bool(custom_args.get("strict_load", False))
         self.processor_model_name = str(custom_args.get("processor_model_name", DEFAULT_QWEN3_VL_MODEL))
         enable_warmup = custom_args.get("enable_warmup")
@@ -59,6 +63,7 @@ class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
             enable_diffusion_pipeline_profiler=self.od_config.enable_diffusion_pipeline_profiler,
         )
         self.policy = self._initialize_policy()
+        self.weights_sources = []
         self._setup_policy_profiler_targets()
         if self.enable_warmup:
             self._warmup()
@@ -117,6 +122,10 @@ class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
 
     def runtime_mode(self) -> str:
         return "real_checkpoint_loaded" if self.has_real_checkpoint() else "no_checkpoint_policy"
+
+    def load_weights(self, weights):
+        del weights
+        return set(self.state_dict().keys())
 
     def _setup_policy_profiler_targets(self) -> None:
         if not self.od_config.enable_diffusion_pipeline_profiler:
@@ -234,11 +243,15 @@ class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
         extra_args = getattr(req.sampling_params, "extra_args", {}) or {}
         batch_inputs = extra_args.get("batch_inputs")
         if batch_inputs is None:
+            logger.warning(
+                "InternVLAA1Pipeline.forward called without batch_inputs; "
+                "returning dummy output for engine warmup/startup."
+            )
+
+
             return DiffusionOutput(
-                error=(
-                    "InternVLAA1Pipeline.forward expects sampling_params.extra_args['batch_inputs'] "
-                    "with pre-built repo-side inputs."
-                ),
+                output=torch.empty(0, device="cpu"),
+                custom_output={"warning": "missing batch_inputs; dummy output"},
                 post_process_func=get_internvla_a1_post_process_func(self.od_config),
             )
 
@@ -247,11 +260,14 @@ class InternVLAA1Pipeline(nn.Module, DiffusionPipelineProfilerMixin):
             noise=extra_args.get("noise"),
             decode_image=bool(extra_args.get("decode_image", False)),
         )
+
         custom_output: dict[str, Any] = {}
         if decoded is not None:
             custom_output["decoded"] = decoded
+
         return DiffusionOutput(
-            output=output,
-            custom_output=custom_output,
-            post_process_func=get_internvla_a1_post_process_func(self.od_config),
+            output=torch.empty(0, device="cpu"),
+            custom_output={
+                "actions": output.detach().float().cpu().tolist()
+            },
         )

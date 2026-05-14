@@ -1486,6 +1486,9 @@ class AsyncOmniEngine:
                 attention_backend=kwargs.get("diffusion_attention_backend"),
             )
 
+        print("DEBUG_ASYNC_OMNI_KWARGS_KEYS:", sorted(kwargs.keys()), flush=True)
+        print("DEBUG_ASYNC_OMNI_CUSTOM_PIPELINE_ARGS:", kwargs.get("custom_pipeline_args", None), flush=True)
+
         stage_engine_args = {
             "max_num_seqs": kwargs.get("max_num_seqs") or 1,
             "parallel_config": parallel_config,

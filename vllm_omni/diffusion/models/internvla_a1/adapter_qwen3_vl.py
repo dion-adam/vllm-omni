@@ -15,9 +15,9 @@ from transformers.models.qwen3_vl.modeling_qwen3_vl import (
     Qwen3VLVisionModel,
     Unpack,
     apply_rotary_pos_emb,
-    check_model_inputs,
+    #check_model_inputs,
     create_causal_mask,
-    deprecate_kwarg,
+    #deprecate_kwarg,
     eager_attention_forward,
 )
 from transformers.models.qwen3_vl.modeling_qwen3_vl import (
@@ -55,7 +55,7 @@ class Qwen3VLTextAttention(HFQwen3VLTextAttention):
         self.q_norm = Qwen3VLTextRMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.k_norm = Qwen3VLTextRMSNorm(self.head_dim, eps=config.rms_norm_eps)
 
-    @deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
+    #@deprecate_kwarg("past_key_value", new_name="past_key_values", version="4.58")
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -134,7 +134,7 @@ class Qwen3VLTextModel(HFQwen3VLTextModel):
 
         self.post_init()
 
-    @check_model_inputs
+    #@check_model_inputs
     def forward(
         self,
         input_ids: torch.LongTensor = None,
