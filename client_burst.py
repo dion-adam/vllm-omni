@@ -162,46 +162,48 @@ def print_results(all_stats: List[Dict]):
     print("📈 LOAD TEST RESULTS SUMMARY")
     print("="*100)
     
-    print(f"\n{'λ (req/s)':>10} | {'Requests':>10} | {'Success %':>10} | "
+    print(f"\n{'λ (req/s)':>15} | {'Requests':>10} | {'Success %':>10} | "
           f"{'Actual λ':>10} | {'Mean (ms)':>10} | {'Median (ms)':>10} | "
           f"{'P95 (ms)':>10} | {'P99 (ms)':>10}")
-    print("-" * 100)
+    print("-" * 110)
     
     for stats in all_stats:
         if "error" in stats:
-            print(f"{stats['lambda']:>10.1f} | {'ERROR':>10}")
+            lambda_str = str(stats['lambda'])
+            print(f"{lambda_str:>15} | {'ERROR':>10}")
             continue
         
+        lambda_str = str(stats['lambda']) if isinstance(stats['lambda'], str) else f"{stats['lambda']:.1f}"
+        
         print(
-            f"{stats['lambda']:>10.1f} | "
+            f"{lambda_str:>15} | "
             f"{stats['num_requests']:>10} | "
             f"{stats['success_rate']:>9.1f}% | "
-            f"{stats['actual_throughput']:>10.1f} | "
+            f"{stats.get('actual_throughput', 0):>10.2f} | "
             f"{stats['mean_latency_ms']:>10.2f} | "
             f"{stats['median_latency_ms']:>10.2f} | "
             f"{stats['p95_latency_ms']:>10.2f} | "
             f"{stats['p99_latency_ms']:>10.2f}"
         )
     
-    print("-" * 100)
+    print("-" * 110)
     
     # Find inflection point where latency starts degrading
     print("\n📊 Key Observations:")
-    if len(all_stats) > 1:
-        means = [s["mean_latency_ms"] for s in all_stats if "error" not in s]
+    numeric_stats = [s for s in all_stats[1:] if "error" not in s]  # Skip baseline
+    if len(numeric_stats) > 1:
+        means = [s["mean_latency_ms"] for s in numeric_stats]
         if len(means) > 1:
             for i in range(1, len(means)):
                 if means[i] > means[i-1] * 1.5:  # 50% increase
-                    print(f"   ⚠️  Latency degradation noticed at λ={all_stats[i]['lambda']:.1f}")
+                    lambda_val = numeric_stats[i]['lambda']
+                    print(f"   ⚠️  Latency degradation noticed at λ={lambda_val:.1f}")
                     break
     
     # Print latency breakdown for highest load
-    highest_load = max(
-        (s for s in all_stats if "error" not in s),
-        key=lambda x: x["lambda"],
-        default=None
-    )
-    if highest_load:
+    load_stats = [s for s in all_stats if "error" not in s and isinstance(s.get('lambda'), (int, float))]
+    if load_stats:
+        highest_load = max(load_stats, key=lambda x: x["lambda"])
         print(f"\n   Highest Load Test (λ={highest_load['lambda']:.1f}):")
         print(f"     • Mean latency: {highest_load['mean_latency_ms']:.2f}ms")
         print(f"     • Std deviation: {highest_load['stdev_latency_ms']:.2f}ms")
@@ -288,7 +290,8 @@ def main():
     for stats in all_stats[1:]:  # Skip baseline
         if "error" not in stats:
             slowdown = stats["mean_latency_ms"] / baseline_mean
-            print(f"   λ={stats['lambda']:.1f}: {stats['mean_latency_ms']:.2f}ms ({slowdown:.1f}x baseline)")
+            lambda_str = f"{stats['lambda']:.1f}" if isinstance(stats['lambda'], (int, float)) else str(stats['lambda'])
+            print(f"   λ={lambda_str}: {stats['mean_latency_ms']:.2f}ms ({slowdown:.1f}x baseline)")
             if slowdown > 3:
                 print(f"      ⚠️  SEVERE queueing detected! Requests are waiting {slowdown:.1f}x longer")
     
