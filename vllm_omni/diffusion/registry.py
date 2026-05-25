@@ -146,7 +146,7 @@ _DIFFUSION_MODELS = {
         "pipeline_internvla_a1",
         "InternVLAA1Pipeline",
     ),
-    "XVLAPipeline": (
+    "XVLA": (
         "xvla",
         "pipeline_xvla",
         "XVLAPipeline",
@@ -468,7 +468,7 @@ _DIFFUSION_POST_PROCESS_FUNCS = {
     "LongCatImagePipeline": "get_longcat_image_post_process_func",
     "BagelPipeline": "get_bagel_post_process_func",
     "InternVLAA1Pipeline": "get_internvla_a1_post_process_func",
-    "XVLAPipeline": "get_xvla_post_process_func",
+    "XVLA": "get_xvla_post_process_func",
     "LongCatImageEditPipeline": "get_longcat_image_post_process_func",
     "StableDiffusion3Pipeline": "get_sd3_image_post_process_func",
     "FluxKontextPipeline": "get_flux_kontext_post_process_func",

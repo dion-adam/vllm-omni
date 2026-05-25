@@ -6,7 +6,7 @@ from vllm_omni.config.stage_config import (
 
 XVLA_PIPELINE = PipelineConfig(
     model_type="xvla",
-    model_arch="XVLAPipeline",
+    model_arch="XVLA",
     hf_architectures=("XVLA",),
     stages=(
         StagePipelineConfig(
