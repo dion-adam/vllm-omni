@@ -1731,7 +1731,11 @@ async def generate_actions(request: ActionGenerationRequest, raw_request: Reques
     imgs = {}
     for name, b64 in request.images.items():
         pil = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
-        imgs[name] = transform(pil)
+        img = transform(pil)
+        # Robot action pipelines expect an image history per camera. For a
+        # single uploaded frame, repeat it to create a minimal [T, C, H, W]
+        # history before collate_open_loop_samples adds the batch dimension.
+        imgs[name] = torch.stack([img, img], dim=0)
 
     inputs = {
         OBS_TASK: request.task,
