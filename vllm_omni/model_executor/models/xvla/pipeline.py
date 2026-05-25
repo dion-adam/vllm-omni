@@ -19,5 +19,3 @@ XVLA_PIPELINE = PipelineConfig(
         ),
     ),
 )
-
-XVLA_SINGLE_STAGE_PIPELINE = XVLA_PIPELINE

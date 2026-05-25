@@ -8,5 +8,7 @@ stages:
     enforce_eager: true
     enable_prefix_caching: false
     devices: "0"
+    engine_extras:
+      model_class_name: XVLAPipeline
     default_sampling_params:
       seed: 52
