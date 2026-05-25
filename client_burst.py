@@ -209,6 +209,42 @@ def print_results(all_stats: List[Dict]):
         print(f"     • Duration: {highest_load['actual_duration_sec']:.2f}s")
 
 
+def test_sequential_baseline(server_url: str = "http://localhost:8091", num_requests: int = 10) -> Dict:
+    """
+    Test requests sent sequentially (one at a time) to measure baseline latency.
+    """
+    print(f"\n⏱️  Baseline: Sequential Requests ({num_requests} requests)")
+    
+    latencies = []
+    successes = 0
+    
+    for i in range(num_requests):
+        latency_ms, status_code, success = send_single_request(server_url)
+        latencies.append(latency_ms)
+        if success:
+            successes += 1
+        
+        if (i + 1) % 5 == 0:
+            print(f"   ✓ {i + 1}/{num_requests} completed")
+    
+    stats = {
+        "lambda": "sequential",
+        "num_requests": num_requests,
+        "successes": successes,
+        "failures": num_requests - successes,
+        "success_rate": (successes / num_requests * 100) if num_requests > 0 else 0,
+        "min_latency_ms": min(latencies),
+        "max_latency_ms": max(latencies),
+        "mean_latency_ms": statistics.mean(latencies),
+        "median_latency_ms": statistics.median(latencies),
+        "stdev_latency_ms": statistics.stdev(latencies) if len(latencies) > 1 else 0,
+        "p95_latency_ms": np.percentile(latencies, 95),
+        "p99_latency_ms": np.percentile(latencies, 99),
+    }
+    
+    return stats
+
+
 def main():
     server_url = "http://localhost:8091"
     
@@ -216,12 +252,15 @@ def main():
     print(f"   Target: {server_url}/v1/actions/generations")
     print("   Testing with Poisson-distributed request arrivals\n")
     
+    # FIRST: Get baseline with sequential requests
+    baseline_stats = test_sequential_baseline(server_url, num_requests=10)
+    
     # Test different Poisson rates (lambda values)
     # Start with low load, gradually increase
     lambda_values = [0.5, 1.0, 2.0, 4.0, 8.0]
     num_requests_per_test = 30
     
-    all_stats = []
+    all_stats = [baseline_stats]
     
     for lambda_param in lambda_values:
         try:
@@ -240,6 +279,18 @@ def main():
     
     # Print summary
     print_results(all_stats)
+    
+    # Analyze queueing
+    print("\n🔍 QUEUEING ANALYSIS:")
+    baseline_mean = baseline_stats["mean_latency_ms"]
+    print(f"   Baseline (sequential): {baseline_mean:.2f}ms per request")
+    
+    for stats in all_stats[1:]:  # Skip baseline
+        if "error" not in stats:
+            slowdown = stats["mean_latency_ms"] / baseline_mean
+            print(f"   λ={stats['lambda']:.1f}: {stats['mean_latency_ms']:.2f}ms ({slowdown:.1f}x baseline)")
+            if slowdown > 3:
+                print(f"      ⚠️  SEVERE queueing detected! Requests are waiting {slowdown:.1f}x longer")
     
     # Save results to JSON
     results_file = "load_test_results.json"
