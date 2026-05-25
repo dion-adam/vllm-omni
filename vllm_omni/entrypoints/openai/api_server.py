@@ -1755,10 +1755,14 @@ async def generate_actions(request: ActionGenerationRequest, raw_request: Reques
         },
     )
 
+    # Create a prompt dict with the action task information
+    action_prompt = {"task": request.task}
+
     result = await _generate_with_async_omni(
         engine_client=engine_client,
         gen_params=gen_params,
         stage_configs=stage_configs,
+        prompt=action_prompt,
         request_id=request_id,
     )
 
@@ -2193,7 +2197,11 @@ async def _generate_with_async_omni(
         replace_diffusion_params=True,
     )
 
+    # Extract prompt from kwargs (required positional arg for AsyncOmni.generate)
+    prompt = kwargs.pop("prompt", "")
+    
     async for output in engine_client.generate(
+        prompt=prompt,
         sampling_params_list=sampling_params_list,
         **kwargs,
     ):
