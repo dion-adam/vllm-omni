@@ -1,0 +1,12 @@
+pipeline: xvla
+async_chunk: false
+trust_remote_code: true
+
+stages:
+  - stage_id: 0
+    max_num_seqs: 1
+    enforce_eager: true
+    enable_prefix_caching: false
+    devices: "0"
+    default_sampling_params:
+      seed: 52

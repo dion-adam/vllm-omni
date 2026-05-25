@@ -4,10 +4,10 @@ from vllm_omni.config.stage_config import (
     StagePipelineConfig,
 )
 
-XVLA_SINGLE_STAGE_PIPELINE = PipelineConfig(
-    model_type="xvla_single_stage",
+XVLA_PIPELINE = PipelineConfig(
+    model_type="xvla",
     model_arch="XVLAPipeline",
-    hf_architectures=(),
+    hf_architectures=("XVLA",),
     stages=(
         StagePipelineConfig(
             stage_id=0,
@@ -19,3 +19,5 @@ XVLA_SINGLE_STAGE_PIPELINE = PipelineConfig(
         ),
     ),
 )
+
+XVLA_SINGLE_STAGE_PIPELINE = XVLA_PIPELINE

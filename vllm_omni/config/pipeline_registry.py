@@ -69,6 +69,10 @@ _OMNI_PIPELINES: dict[str, tuple[str, str]] = {
         "vllm_omni.model_executor.models.internvla_a1.pipeline",
         "INTERNVLA_A1_SINGLE_STAGE_PIPELINE",
     ),
+    "xvla": (
+        "vllm_omni.model_executor.models.xvla.pipeline",
+        "XVLA_PIPELINE",
+    ),
     "xvla_single_stage": (
         "vllm_omni.model_executor.models.xvla.pipeline",
         "XVLA_SINGLE_STAGE_PIPELINE",

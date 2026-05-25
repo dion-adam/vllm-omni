@@ -9,7 +9,6 @@ import multiprocessing
 import multiprocessing.forkserver as forkserver
 import os
 import torch
-from vllm_omni.diffusion.models.internvla_a1.config import OBS_TASK, OBS_STATE, OBS_IMAGES
 # Image generation API imports
 import random
 import time
@@ -138,6 +137,9 @@ from vllm_omni.inputs.data import OmniDiffusionSamplingParams, OmniTextPrompt
 
 logger = init_logger(__name__)
 router = APIRouter()
+OBS_TASK = "observation.task"
+OBS_STATE = "observation.state"
+OBS_IMAGES = "observation.images"
 
 MAX_UINT32_SEED = 2**32 - 1
 profiler_router = APIRouter()
@@ -1715,6 +1717,12 @@ async def generate_actions(request: ActionGenerationRequest, raw_request: Reques
     if request.images is None:
         raise HTTPException(status_code=400, detail="Missing images")
 
+    if request.model is not None and request.model != model_name:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            detail=(f"Model mismatch: request specifies '{request.model}' but server is running '{model_name}'."),
+        )
+
     transform = T.Compose([
         T.Resize((224, 224)),
         T.ToTensor(),
@@ -1723,28 +1731,29 @@ async def generate_actions(request: ActionGenerationRequest, raw_request: Reques
     imgs = {}
     for name, b64 in request.images.items():
         pil = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
-        img = transform(pil)                    # (3, 224, 224)
-        imgs[name] = torch.stack([img, img], 0) # (2, 3, 224, 224)
+        imgs[name] = transform(pil)
 
-    sample = ActionSample(
-        task=request.task,
-        inputs={
-            OBS_TASK: request.task,
-            OBS_STATE: torch.tensor(request.state),
+    inputs = {
+        OBS_TASK: request.task,
+    }
+    if request.state is not None:
+        inputs[OBS_STATE] = torch.tensor(request.state, dtype=torch.float32)
 
-            f"{OBS_IMAGES}.image0": imgs["image0"],
-            f"{OBS_IMAGES}.image1": imgs["image1"],
-            f"{OBS_IMAGES}.image2": imgs["image2"],
+    for name in sorted(imgs):
+        inputs[f"{OBS_IMAGES}.{name}"] = imgs[name]
+        inputs[f"{OBS_IMAGES}.{name}_mask"] = torch.tensor(True)
 
-            f"{OBS_IMAGES}.image0_mask": torch.tensor(True),
-            f"{OBS_IMAGES}.image1_mask": torch.tensor(True),
-            f"{OBS_IMAGES}.image2_mask": torch.tensor(True),
-        },
-    )
+    extra_args = request.extra_args or {}
+    for key in ("domain_id", "steps"):
+        if key in extra_args:
+            inputs[key] = extra_args[key]
 
+    sample = ActionSample(task=request.task, inputs=inputs)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     batch_inputs, _ = collate_open_loop_samples(
         [sample],
-        device="cuda",
+        device=device,
         dtype=torch.bfloat16,
     )
 
@@ -1769,7 +1778,9 @@ async def generate_actions(request: ActionGenerationRequest, raw_request: Reques
     return {
         "id": request_id,
         "model": model_name,
-        "result": result.request_output,
+        "actions": (result.custom_output or {}).get("actions"),
+        "warning": (result.custom_output or {}).get("warning"),
+        "metrics": getattr(result, "metrics", {}),
     }
 
 @router.post(
