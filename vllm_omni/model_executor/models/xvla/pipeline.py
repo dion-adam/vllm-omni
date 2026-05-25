@@ -4,9 +4,9 @@ from vllm_omni.config.stage_config import (
     StagePipelineConfig,
 )
 
-INTERNVLA_A1_SINGLE_STAGE_PIPELINE = PipelineConfig(
-    model_type="internvla_a1_single_stage",
-    model_arch="InternVLAA1Pipeline",
+XVLA_SINGLE_STAGE_PIPELINE = PipelineConfig(
+    model_type="xvla_single_stage",
+    model_arch="XVLAPipeline",
     hf_architectures=(),
     stages=(
         StagePipelineConfig(
